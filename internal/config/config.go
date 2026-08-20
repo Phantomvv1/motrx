@@ -14,6 +14,7 @@ type Server struct {
 }
 
 type HealthCheck struct {
+	Endpoint string `json:"endpoint"`
 	Interval string `json:"interval"`
 	Timeout  string `json:"timeout"`
 }
