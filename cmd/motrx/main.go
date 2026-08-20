@@ -15,5 +15,11 @@ func main() {
 		return
 	}
 
-	config.ParseConfig(filePath)
+	conf, err := config.ParseConfig(filePath)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	log.Println(conf)
 }
