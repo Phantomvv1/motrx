@@ -1,13 +1,15 @@
 package config
 
-import "log"
+import (
+	"log"
+	"strings"
+)
 
 func ParseConfig(path string) {
-	fileName := ""
-	for i := len(path) - 1; i > 0; i-- {
-		if path[i] == '/' {
-			fileName = path[i+1:]
-		}
+	fileName := path
+	index := strings.LastIndex(path, "/")
+	if index != -1 {
+		fileName = path[index+1:]
 	}
 
 	log.Println(fileName)
