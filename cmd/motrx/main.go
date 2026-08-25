@@ -6,6 +6,7 @@ import (
 
 	"github.com/Phantomvv1/motrx/internal/cli"
 	"github.com/Phantomvv1/motrx/internal/config"
+	"github.com/Phantomvv1/motrx/internal/proxy"
 )
 
 func main() {
@@ -21,5 +22,10 @@ func main() {
 		return
 	}
 
-	log.Println(conf)
+	if err = conf.Valid(); err != nil {
+		log.Printf("Error: invalid config: %v", err)
+		return
+	}
+
+	proxy.StartReverseProxy(conf)
 }

@@ -12,8 +12,8 @@ import (
 )
 
 type Server struct {
-	Address  string `json:"address"`
-	Endpoint string `json:"endpoint"`
+	Address             string `json:"address"`
+	HealthCheckEndpoint string `json:"health"`
 }
 
 type HealthCheck struct {
@@ -33,7 +33,7 @@ type Config struct {
 }
 
 func (c Config) GetInterval() (time.Duration, error) {
-	if len(c.HealthCheck.Timeout) <= 2 {
+	if len(c.HealthCheck.Timeout) < 2 {
 		return 0, errors.New("Error: invalid intevral duration")
 	}
 
@@ -78,7 +78,7 @@ func (c Config) GetInterval() (time.Duration, error) {
 }
 
 func (c Config) GetTimeout() (time.Duration, error) {
-	if len(c.HealthCheck.Timeout) <= 2 {
+	if len(c.HealthCheck.Timeout) < 2 {
 		return 0, errors.New("Error: invalid timeout duration")
 	}
 
@@ -120,6 +120,18 @@ func (c Config) GetTimeout() (time.Duration, error) {
 	default:
 		return 0, errors.New("Error: invalid timeout duration")
 	}
+}
+
+func (c Config) Valid() error {
+	if _, err := c.GetInterval(); err != nil {
+		return err
+	}
+
+	if _, err := c.GetTimeout(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func ParseConfig(path string) (*Config, error) {
