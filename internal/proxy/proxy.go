@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"errors"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -10,8 +12,20 @@ import (
 
 func StartReverseProxy(config *config.Config) {
 	go healthCheckServers(config)
+
 	for {
-		time.Sleep(time.Second)
+		mux := http.NewServeMux()
+
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			handleRequest(w, r, config)
+		})
+
+		log.Println("motrx is now listening on port 8000")
+
+		err := http.ListenAndServe(":8000", mux)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -28,5 +42,59 @@ func healthCheckServers(config *config.Config) {
 		}
 
 		time.Sleep(interval)
+	}
+}
+
+func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config) {
+	server, err := chooseServer(r, config)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	forwardRequest(server, w, r)
+}
+
+func chooseServer(r *http.Request, config *config.Config) (*config.Server, error) {
+	return nil, nil
+}
+
+func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request) {
+	target := "http://" + server.Address + r.URL.RequestURI()
+
+	req, err := http.NewRequest(
+		r.Method,
+		target,
+		r.Body,
+	)
+	if err != nil {
+		http.Error(w, "Failed to create request", http.StatusInternalServerError)
+		return
+	}
+
+	req.Header = r.Header.Clone()
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "Backend unavailable", http.StatusBadGateway)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	w.WriteHeader(resp.StatusCode)
+
+	// Copy response body
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		log.Printf("Error copying response: %v", err)
 	}
 }

@@ -22,7 +22,7 @@ type HealthCheck struct {
 }
 
 type Retry struct {
-	MaxTries int `json:"max_tries"`
+	MaxAttempts int `json:"max_attempts"`
 }
 
 type Config struct {
