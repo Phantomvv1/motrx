@@ -4,17 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/goccy/go-yaml"
 )
 
 type Server struct {
-	Address string `json:"address"`
+	Address  string `json:"address"`
+	Endpoint string `json:"endpoint"`
 }
 
 type HealthCheck struct {
-	Endpoint string `json:"endpoint"`
 	Interval string `json:"interval"`
 	Timeout  string `json:"timeout"`
 }
@@ -28,6 +30,96 @@ type Config struct {
 	LoadBalancingAlgorithm string      `json:"load_balancing_algorithm"`
 	HealthCheck            HealthCheck `json:"health_check"`
 	Retry                  Retry       `json:"retry"`
+}
+
+func (c Config) GetInterval() (time.Duration, error) {
+	if len(c.HealthCheck.Timeout) <= 2 {
+		return 0, errors.New("Error: invalid intevral duration")
+	}
+
+	switch c.HealthCheck.Interval[len(c.HealthCheck.Interval)-1] {
+	case 's':
+		if c.HealthCheck.Interval[len(c.HealthCheck.Interval)-2] == 'm' {
+			interval := c.HealthCheck.Interval[0 : len(c.HealthCheck.Interval)-2]
+			duration, err := strconv.Atoi(interval)
+			if err != nil {
+				return 0, err
+			}
+
+			return time.Millisecond * time.Duration(duration), nil
+		}
+
+		interval := c.HealthCheck.Interval[0 : len(c.HealthCheck.Interval)-1]
+		duration, err := strconv.Atoi(interval)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Second * time.Duration(duration), nil
+	case 'm':
+		interval := c.HealthCheck.Interval[0 : len(c.HealthCheck.Interval)-1]
+		duration, err := strconv.Atoi(interval)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Minute * time.Duration(duration), nil
+	case 'h':
+		interval := c.HealthCheck.Interval[0 : len(c.HealthCheck.Interval)-1]
+		duration, err := strconv.Atoi(interval)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Hour * time.Duration(duration), nil
+	default:
+		return 0, errors.New("Error: invalid interval duration")
+	}
+}
+
+func (c Config) GetTimeout() (time.Duration, error) {
+	if len(c.HealthCheck.Timeout) <= 2 {
+		return 0, errors.New("Error: invalid timeout duration")
+	}
+
+	switch c.HealthCheck.Timeout[len(c.HealthCheck.Interval)-1] {
+	case 's':
+		if c.HealthCheck.Timeout[len(c.HealthCheck.Timeout)-2] == 'm' {
+			interval := c.HealthCheck.Timeout[0 : len(c.HealthCheck.Timeout)-2]
+			duration, err := strconv.Atoi(interval)
+			if err != nil {
+				return 0, err
+			}
+
+			return time.Millisecond * time.Duration(duration), nil
+		}
+
+		interval := c.HealthCheck.Timeout[0 : len(c.HealthCheck.Timeout)-1]
+		duration, err := strconv.Atoi(interval)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Second * time.Duration(duration), nil
+	case 'm':
+		interval := c.HealthCheck.Timeout[0 : len(c.HealthCheck.Timeout)-1]
+		duration, err := strconv.Atoi(interval)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Minute * time.Duration(duration), nil
+	case 'h':
+		interval := c.HealthCheck.Timeout[0 : len(c.HealthCheck.Timeout)-1]
+		duration, err := strconv.Atoi(interval)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Hour * time.Duration(duration), nil
+	default:
+		return 0, errors.New("Error: invalid timeout duration")
+	}
 }
 
 func ParseConfig(path string) (*Config, error) {
