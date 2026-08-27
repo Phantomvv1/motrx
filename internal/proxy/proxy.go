@@ -32,7 +32,9 @@ func StartReverseProxy(config *config.Config) {
 func healthCheckServers(config *config.Config) {
 	// The error values here are always nil since the main function checks if the config is valid
 	interval, _ := config.GetInterval()
-	// timeout, _ := config.GetTimeout()
+	timeout, _ := config.GetTimeout()
+	http.DefaultClient.Timeout = timeout
+
 	for {
 		for _, server := range config.Servers {
 			_, err := http.Get(server.HealthCheckEndpoint)
