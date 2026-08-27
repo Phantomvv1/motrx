@@ -131,6 +131,12 @@ func (c Config) Valid() error {
 		return err
 	}
 
+	for _, server := range c.Servers {
+		if server.Address == "" || server.HealthCheckEndpoint == "" {
+			return errors.New("Error: a server is missing an address or a health check endpoint")
+		}
+	}
+
 	return nil
 }
 
