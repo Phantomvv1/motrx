@@ -66,6 +66,7 @@ func chooseServer(r *http.Request, config *config.Config) (*config.Server, error
 	for _, server := range healthyServers {
 		log.Println(server.Address, server.HealthCheckEndpoint, server.Healthy())
 	}
+
 	return nil, errors.New("Error: no servers were available")
 }
 
