@@ -47,6 +47,16 @@ type Config struct {
 	LoadBalancingAlgorithm string      `json:"load_balancing_algorithm"`
 	HealthCheck            HealthCheck `json:"health_check"`
 	Retry                  Retry       `json:"retry"`
+	algorithms             *Algorithms
+}
+
+func (c *Config) setupConfig() {
+	c.algorithms = NewAlgorithms(c)
+
+	for _, server := range c.Servers {
+		server.mu = sync.Mutex{}
+	}
+
 }
 
 func (c Config) GetInterval() (time.Duration, error) {
@@ -168,6 +178,10 @@ func (c Config) HealthyServers() []*Server {
 	return healthyServers
 }
 
+func (c *Config) Algorithm() SelectionAlgorithm {
+	return c.algorithms.RoundRobin
+}
+
 func ParseConfig(path string) (*Config, error) {
 	fileName := path
 	index := strings.LastIndex(path, "/")
@@ -205,9 +219,7 @@ func ParseConfig(path string) (*Config, error) {
 		}
 	}
 
-	for _, server := range conf.Servers {
-		server.mu = sync.Mutex{}
-	}
+	conf.setupConfig()
 
 	return conf, nil
 }
