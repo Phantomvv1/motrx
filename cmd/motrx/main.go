@@ -22,6 +22,11 @@ func main() {
 		return
 	}
 
+	// log.Println(conf)
+	// for _, server := range conf.Servers {
+	// 	log.Println(server.Address, server.HealthCheckEndpoint, server.Healthy())
+	// }
+
 	if err = conf.Valid(); err != nil {
 		log.Printf("Error: invalid config: %v", err)
 		return

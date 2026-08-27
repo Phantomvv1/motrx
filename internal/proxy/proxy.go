@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -38,7 +37,10 @@ func healthCheckServers(config *config.Config) {
 			_, err := http.Get(server.HealthCheckEndpoint)
 			if err != nil {
 				log.Printf("Error: %s is not responding", server.Address)
+				server.UpdateHealth(false)
 			}
+
+			server.UpdateHealth(true)
 		}
 
 		time.Sleep(interval)
@@ -57,6 +59,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config
 }
 
 func chooseServer(r *http.Request, config *config.Config) (*config.Server, error) {
+	healthyServers := config.HealthyServers()
+	log.Println(healthyServers)
 	return nil, nil
 }
 
@@ -83,7 +87,6 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 
 	defer resp.Body.Close()
 
-	// Copy response headers
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)
@@ -92,7 +95,6 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 
 	w.WriteHeader(resp.StatusCode)
 
-	// Copy response body
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		log.Printf("Error copying response: %v", err)
