@@ -29,7 +29,6 @@ func (a *Algorithms) RoundRobin() (*Server, error) {
 		return nil, errors.New("Error: there are no healthy servers")
 	}
 
-	log.Println(healthyServers, a.usedServers)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
