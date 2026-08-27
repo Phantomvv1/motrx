@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -14,6 +15,22 @@ import (
 type Server struct {
 	Address             string `json:"address"`
 	HealthCheckEndpoint string `json:"health"`
+	healthy             bool
+	mu                  sync.Mutex
+}
+
+func (s *Server) UpdateHealth(status bool) {
+	s.mu.Lock()
+	s.healthy = status
+	s.mu.Unlock()
+}
+
+func (s *Server) Healthy() bool {
+	s.mu.Lock()
+	health := s.healthy
+	s.mu.Unlock()
+
+	return health
 }
 
 type HealthCheck struct {
@@ -22,11 +39,11 @@ type HealthCheck struct {
 }
 
 type Retry struct {
-	MaxTries int `json:"max_tries"`
+	MaxAttempts int `json:"max_attempts"`
 }
 
 type Config struct {
-	Servers                []Server    `json:"servers"`
+	Servers                []*Server   `json:"servers"`
 	LoadBalancingAlgorithm string      `json:"load_balancing_algorithm"`
 	HealthCheck            HealthCheck `json:"health_check"`
 	Retry                  Retry       `json:"retry"`
@@ -131,7 +148,24 @@ func (c Config) Valid() error {
 		return err
 	}
 
+	for _, server := range c.Servers {
+		if server.Address == "" {
+			return errors.New("Error: a server is missing an address or a health check endpoint")
+		}
+	}
+
 	return nil
+}
+
+func (c Config) HealthyServers() []*Server {
+	healthyServers := []*Server{}
+	for _, server := range c.Servers {
+		if server.Healthy() {
+			healthyServers = append(healthyServers, server)
+		}
+	}
+
+	return healthyServers
 }
 
 func ParseConfig(path string) (*Config, error) {
@@ -169,6 +203,10 @@ func ParseConfig(path string) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	for _, server := range conf.Servers {
+		server.mu = sync.Mutex{}
 	}
 
 	return conf, nil
