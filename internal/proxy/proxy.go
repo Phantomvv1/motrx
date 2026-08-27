@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -38,9 +39,9 @@ func healthCheckServers(config *config.Config) {
 			if err != nil {
 				log.Printf("Error: %s is not responding", server.Address)
 				server.UpdateHealth(false)
+			} else {
+				server.UpdateHealth(true)
 			}
-
-			server.UpdateHealth(true)
 		}
 
 		time.Sleep(interval)
@@ -60,8 +61,10 @@ func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config
 
 func chooseServer(r *http.Request, config *config.Config) (*config.Server, error) {
 	healthyServers := config.HealthyServers()
-	log.Println(healthyServers)
-	return nil, nil
+	for _, server := range healthyServers {
+		log.Println(server.Address, server.HealthCheckEndpoint, server.Healthy())
+	}
+	return nil, errors.New("Error: no servers were available")
 }
 
 func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request) {
