@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"log"
 	"slices"
 	"sync"
 )

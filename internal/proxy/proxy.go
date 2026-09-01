@@ -85,6 +85,7 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 
 	req.Header = r.Header.Clone()
 
+	now := time.Now()
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, "Backend unavailable", http.StatusBadGateway)
@@ -105,4 +106,6 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		log.Printf("Error copying response: %v", err)
 	}
+
+	log.Printf("%s %s -> %s -> %d -> %v", r.Method, r.URL.Path, server.Address, resp.StatusCode, time.Since(now))
 }
