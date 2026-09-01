@@ -15,8 +15,12 @@ import (
 type Server struct {
 	Address             string `json:"address"`
 	HealthCheckEndpoint string `json:"health"`
+	Weight              int    `json:"weight"`
 	healthy             bool
 	mu                  sync.Mutex
+
+	connections   int
+	muConnections sync.Mutex
 }
 
 func (s *Server) UpdateHealth(status bool) {
@@ -31,6 +35,26 @@ func (s *Server) Healthy() bool {
 	s.mu.Unlock()
 
 	return health
+}
+
+func (s *Server) AddConnection() {
+	s.muConnections.Lock()
+	s.connections++
+	s.muConnections.Unlock()
+}
+
+func (s *Server) SubtractConnection() {
+	s.muConnections.Lock()
+	s.connections--
+	s.muConnections.Unlock()
+}
+
+func (s *Server) Connections() int {
+	s.muConnections.Lock()
+	conns := s.connections
+	s.muConnections.Unlock()
+
+	return conns
 }
 
 type HealthCheck struct {
@@ -55,6 +79,7 @@ func (c *Config) setupConfig() {
 
 	for _, server := range c.Servers {
 		server.mu = sync.Mutex{}
+		server.muConnections = sync.Mutex{}
 	}
 
 }
@@ -179,7 +204,7 @@ func (c Config) HealthyServers() []*Server {
 }
 
 func (c *Config) Algorithm() SelectionAlgorithm {
-	return c.algorithms.RoundRobin
+	return c.algorithms.LeastConnections
 }
 
 func ParseConfig(path string) (*Config, error) {

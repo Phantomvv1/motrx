@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"math/rand"
 	"slices"
@@ -53,4 +54,17 @@ func (a *Algorithms) Random() (*Server, error) {
 
 	num := rand.Intn(len(healthyServers))
 	return healthyServers[num], nil
+}
+
+func (a *Algorithms) LeastConnections() (*Server, error) {
+	healthyServers := a.config.HealthyServers()
+	if len(healthyServers) == 0 {
+		return nil, errors.New("Error: there are no healthy servers")
+	}
+
+	server := slices.MinFunc(healthyServers, func(serverA, serverB *Server) int {
+		return cmp.Compare(serverA.Connections(), serverB.Connections())
+	})
+
+	return server, nil
 }

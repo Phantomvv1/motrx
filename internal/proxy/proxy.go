@@ -85,13 +85,14 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 
 	req.Header = r.Header.Clone()
 
+	server.AddConnection()
+	defer server.SubtractConnection()
 	now := time.Now()
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, "Backend unavailable", http.StatusBadGateway)
 		return
 	}
-
 	defer resp.Body.Close()
 
 	for key, values := range resp.Header {
