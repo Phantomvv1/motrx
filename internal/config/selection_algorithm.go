@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"math/rand"
 	"slices"
 	"sync"
 )
@@ -42,4 +43,14 @@ func (a *Algorithms) RoundRobin() (*Server, error) {
 	a.usedServers = []*Server{server}
 
 	return server, nil
+}
+
+func (a *Algorithms) Random() (*Server, error) {
+	healthyServers := a.config.HealthyServers()
+	if len(healthyServers) == 0 {
+		return nil, errors.New("Error: there are no healthy servers")
+	}
+
+	num := rand.Intn(len(healthyServers))
+	return healthyServers[num], nil
 }
