@@ -187,6 +187,10 @@ func (c Config) Valid() error {
 		if server.Address == "" {
 			return errors.New("Error: a server is missing an address or a health check endpoint")
 		}
+
+		if server.Weight == 0 {
+			server.Weight = 1
+		}
 	}
 
 	return nil
@@ -204,7 +208,18 @@ func (c Config) HealthyServers() []*Server {
 }
 
 func (c *Config) Algorithm() SelectionAlgorithm {
-	return c.algorithms.LeastConnections
+	algorithms := map[string]SelectionAlgorithm{
+		"round_roin":          c.algorithms.RoundRobin,
+		"weighted_round_roin": c.algorithms.WeightedRoundRobin,
+		"random":              c.algorithms.Random,
+		"least_connections":   c.algorithms.LeastConnections,
+	}
+
+	if alg, ok := algorithms[c.LoadBalancingAlgorithm]; !ok {
+		return c.algorithms.LeastConnections
+	} else {
+		return alg
+	}
 }
 
 func ParseConfig(path string) (*Config, error) {

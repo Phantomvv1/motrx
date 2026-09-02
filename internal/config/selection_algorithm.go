@@ -14,6 +14,9 @@ type Algorithms struct {
 	config      *Config
 	usedServers []*Server
 	mu          sync.Mutex
+
+	serverMap   map[*Server]int
+	muServerMap sync.Mutex
 }
 
 func NewAlgorithms(config *Config) *Algorithms {
@@ -21,6 +24,8 @@ func NewAlgorithms(config *Config) *Algorithms {
 		config:      config,
 		usedServers: nil,
 		mu:          sync.Mutex{},
+		serverMap:   make(map[*Server]int),
+		muServerMap: sync.Mutex{},
 	}
 }
 
@@ -65,6 +70,30 @@ func (a *Algorithms) LeastConnections() (*Server, error) {
 	server := slices.MinFunc(healthyServers, func(serverA, serverB *Server) int {
 		return cmp.Compare(serverA.Connections(), serverB.Connections())
 	})
+
+	return server, nil
+}
+
+func (a *Algorithms) WeightedRoundRobin() (*Server, error) {
+	healthyServers := a.config.HealthyServers()
+	if len(healthyServers) == 0 {
+		return nil, errors.New("Error: there are no healthy servers")
+	}
+
+	a.muServerMap.Lock()
+	defer a.muServerMap.Unlock()
+
+	for _, server := range healthyServers {
+		if a.serverMap[server] < server.Weight {
+			a.serverMap[server] = a.serverMap[server] + 1
+			return server, nil
+		}
+	}
+
+	server := healthyServers[0]
+	for _, server := range healthyServers {
+		a.serverMap[server] = 0
+	}
 
 	return server, nil
 }
