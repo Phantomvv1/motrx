@@ -61,7 +61,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config
 }
 
 func chooseServer(r *http.Request, config *config.Config) (*config.Server, error) {
-	alg := config.Algorithm()
+	alg, _ := config.Algorithm()
 	server, err := alg()
 	if err != nil {
 		return nil, err

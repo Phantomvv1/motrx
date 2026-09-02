@@ -90,10 +90,13 @@ func (a *Algorithms) WeightedRoundRobin() (*Server, error) {
 		}
 	}
 
-	server := healthyServers[0]
-	for _, server := range healthyServers {
-		a.serverMap[server] = 0
+	for i, server := range healthyServers {
+		if i == 0 {
+			a.serverMap[server] = 1
+		} else {
+			a.serverMap[server] = 0
+		}
 	}
 
-	return server, nil
+	return healthyServers[0], nil
 }

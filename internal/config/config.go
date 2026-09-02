@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -193,6 +194,11 @@ func (c Config) Valid() error {
 		}
 	}
 
+	_, ok := c.Algorithm()
+	if !ok {
+		log.Println("There wasn't an algorithm selected. Defaluting to Least Connections.")
+	}
+
 	return nil
 }
 
@@ -207,18 +213,18 @@ func (c Config) HealthyServers() []*Server {
 	return healthyServers
 }
 
-func (c *Config) Algorithm() SelectionAlgorithm {
+func (c *Config) Algorithm() (SelectionAlgorithm, bool) {
 	algorithms := map[string]SelectionAlgorithm{
-		"round_roin":          c.algorithms.RoundRobin,
-		"weighted_round_roin": c.algorithms.WeightedRoundRobin,
-		"random":              c.algorithms.Random,
-		"least_connections":   c.algorithms.LeastConnections,
+		"round_robin":          c.algorithms.RoundRobin,
+		"weighted_round_robin": c.algorithms.WeightedRoundRobin,
+		"random":               c.algorithms.Random,
+		"least_connections":    c.algorithms.LeastConnections,
 	}
 
 	if alg, ok := algorithms[c.LoadBalancingAlgorithm]; !ok {
-		return c.algorithms.LeastConnections
+		return c.algorithms.LeastConnections, ok
 	} else {
-		return alg
+		return alg, ok
 	}
 }
 
