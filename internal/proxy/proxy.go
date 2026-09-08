@@ -23,7 +23,7 @@ type RetryRequest struct {
 func StartReverseProxy(config *config.Config) {
 	go healthCheckServers(config)
 
-	retryChan := make(chan RetryRequest)
+	retryChan := make(chan RetryRequest, 10)
 	go retryRequest(config, retryChan)
 
 	for {
