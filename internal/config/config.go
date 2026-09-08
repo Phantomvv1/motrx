@@ -65,6 +65,7 @@ type HealthCheck struct {
 
 type Retry struct {
 	MaxAttempts int `json:"max_attempts"`
+	Delay       int `json:"delay"`
 }
 
 type Config struct {
@@ -226,6 +227,14 @@ func (c *Config) Algorithm() (SelectionAlgorithm, bool) {
 	} else {
 		return alg, ok
 	}
+}
+
+func (c Config) Delay() int {
+	if c.Retry.Delay == 0 {
+		return 1
+	}
+
+	return c.Retry.Delay
 }
 
 func ParseConfig(path string) (*Config, error) {
