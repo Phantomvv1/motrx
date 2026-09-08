@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -22,11 +23,14 @@ type RetryRequest struct {
 func StartReverseProxy(config *config.Config) {
 	go healthCheckServers(config)
 
+	retryChan := make(chan RetryRequest)
+	go retryRequest(config, retryChan)
+
 	for {
 		mux := http.NewServeMux()
 
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			handleRequest(w, r, config)
+			handleRequest(w, r, config, retryChan)
 		})
 
 		log.Println("motrx is now listening on port 8000")
@@ -59,7 +63,7 @@ func healthCheckServers(config *config.Config) {
 	}
 }
 
-func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config) {
+func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config, retryChan chan RetryRequest) {
 	server, err := chooseServer(config)
 	if err != nil {
 		log.Println(err)
@@ -67,7 +71,6 @@ func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config
 		return
 	}
 
-	retryChan := make(chan RetryRequest)
 	forwardRequest(server, w, r, retryChan, config.Delay())
 }
 
@@ -82,19 +85,11 @@ func chooseServer(config *config.Config) (*config.Server, error) {
 }
 
 func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request, retryChan chan<- RetryRequest, delay int) {
-	target := "http://" + server.Address + r.URL.RequestURI()
-
-	req, err := http.NewRequest(
-		r.Method,
-		target,
-		r.Body,
-	)
+	req, err := createReq(server, w, r)
 	if err != nil {
 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
 		return
 	}
-
-	req.Header = r.Header.Clone()
 
 	server.AddConnection()
 	defer server.SubtractConnection()
@@ -116,13 +111,38 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 	writeResponse(w, resp, now, server, r)
 }
 
-func retryRequest(config *config.Config, receive <-chan RetryRequest) {
-	for reqInfo := range receive {
+func retryRequest(config *config.Config, retryChan chan RetryRequest) {
+	for reqInfo := range retryChan {
 		if reqInfo.timesRetried >= config.Retry.MaxAttempts {
 			writeResponse(reqInfo.w, reqInfo.lastResp, reqInfo.lastTS, reqInfo.server, reqInfo.r)
 		}
 
+		server, err := chooseServer(config)
+		if err != nil {
+			log.Println(err)
+			reqInfo.w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		forwardRequest(server, reqInfo.w, reqInfo.r, retryChan, int(reqInfo.delay)*2)
 	}
+}
+
+func createReq(server *config.Server, w http.ResponseWriter, r *http.Request) (*http.Request, error) {
+	target := "http://" + server.Address + r.URL.RequestURI()
+
+	req, err := http.NewRequest(
+		r.Method,
+		target,
+		r.Body,
+	)
+	if err != nil {
+		return nil, errors.New("Error: failed to create request")
+	}
+
+	req.Header = r.Header.Clone()
+
+	return req, nil
 }
 
 func writeResponse(w http.ResponseWriter, resp *http.Response, now time.Time, server *config.Server, r *http.Request) {
