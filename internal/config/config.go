@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -15,8 +16,12 @@ import (
 type Server struct {
 	Address             string `json:"address"`
 	HealthCheckEndpoint string `json:"health"`
+	Weight              int    `json:"weight"`
 	healthy             bool
 	mu                  sync.Mutex
+
+	connections   int
+	muConnections sync.Mutex
 }
 
 func (s *Server) UpdateHealth(status bool) {
@@ -33,6 +38,26 @@ func (s *Server) Healthy() bool {
 	return health
 }
 
+func (s *Server) AddConnection() {
+	s.muConnections.Lock()
+	s.connections++
+	s.muConnections.Unlock()
+}
+
+func (s *Server) SubtractConnection() {
+	s.muConnections.Lock()
+	s.connections--
+	s.muConnections.Unlock()
+}
+
+func (s *Server) Connections() int {
+	s.muConnections.Lock()
+	conns := s.connections
+	s.muConnections.Unlock()
+
+	return conns
+}
+
 type HealthCheck struct {
 	Interval string `json:"interval"`
 	Timeout  string `json:"timeout"`
@@ -47,6 +72,17 @@ type Config struct {
 	LoadBalancingAlgorithm string      `json:"load_balancing_algorithm"`
 	HealthCheck            HealthCheck `json:"health_check"`
 	Retry                  Retry       `json:"retry"`
+	algorithms             *Algorithms
+}
+
+func (c *Config) setupConfig() {
+	c.algorithms = NewAlgorithms(c)
+
+	for _, server := range c.Servers {
+		server.mu = sync.Mutex{}
+		server.muConnections = sync.Mutex{}
+	}
+
 }
 
 func (c Config) GetInterval() (time.Duration, error) {
@@ -152,6 +188,15 @@ func (c Config) Valid() error {
 		if server.Address == "" {
 			return errors.New("Error: a server is missing an address or a health check endpoint")
 		}
+
+		if server.Weight == 0 {
+			server.Weight = 1
+		}
+	}
+
+	_, ok := c.Algorithm()
+	if !ok {
+		log.Println("There wasn't an algorithm selected. Defaluting to Least Connections.")
 	}
 
 	return nil
@@ -166,6 +211,21 @@ func (c Config) HealthyServers() []*Server {
 	}
 
 	return healthyServers
+}
+
+func (c *Config) Algorithm() (SelectionAlgorithm, bool) {
+	algorithms := map[string]SelectionAlgorithm{
+		"round_robin":          c.algorithms.RoundRobin,
+		"weighted_round_robin": c.algorithms.WeightedRoundRobin,
+		"random":               c.algorithms.Random,
+		"least_connections":    c.algorithms.LeastConnections,
+	}
+
+	if alg, ok := algorithms[c.LoadBalancingAlgorithm]; !ok {
+		return c.algorithms.LeastConnections, ok
+	} else {
+		return alg, ok
+	}
 }
 
 func ParseConfig(path string) (*Config, error) {
@@ -205,9 +265,7 @@ func ParseConfig(path string) (*Config, error) {
 		}
 	}
 
-	for _, server := range conf.Servers {
-		server.mu = sync.Mutex{}
-	}
+	conf.setupConfig()
 
 	return conf, nil
 }

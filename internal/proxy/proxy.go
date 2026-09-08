@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -37,9 +36,9 @@ func healthCheckServers(config *config.Config) {
 
 	for {
 		for _, server := range config.Servers {
-			_, err := http.Get(server.HealthCheckEndpoint)
+			_, err := http.Get("http://" + server.Address + server.HealthCheckEndpoint)
 			if err != nil {
-				log.Printf("Error: %s is not responding", server.Address)
+				log.Printf("Error: %s is not responding, %v", server.Address, err)
 				server.UpdateHealth(false)
 			} else {
 				server.UpdateHealth(true)
@@ -62,12 +61,13 @@ func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config
 }
 
 func chooseServer(r *http.Request, config *config.Config) (*config.Server, error) {
-	healthyServers := config.HealthyServers()
-	for _, server := range healthyServers {
-		log.Println(server.Address, server.HealthCheckEndpoint, server.Healthy())
+	alg, _ := config.Algorithm()
+	server, err := alg()
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, errors.New("Error: no servers were available")
+	return server, nil
 }
 
 func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request) {
@@ -85,12 +85,14 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 
 	req.Header = r.Header.Clone()
 
+	server.AddConnection()
+	defer server.SubtractConnection()
+	now := time.Now()
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, "Backend unavailable", http.StatusBadGateway)
 		return
 	}
-
 	defer resp.Body.Close()
 
 	for key, values := range resp.Header {
@@ -105,4 +107,6 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		log.Printf("Error copying response: %v", err)
 	}
+
+	log.Printf("%s %s -> %s -> %d -> %v", r.Method, r.URL.Path, server.Address, resp.StatusCode, time.Since(now))
 }
