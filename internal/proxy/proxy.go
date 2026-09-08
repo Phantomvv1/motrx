@@ -84,7 +84,7 @@ func chooseServer(config *config.Config) (*config.Server, error) {
 	return server, nil
 }
 
-func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request, retryChan chan<- RetryRequest, delay int) {
+func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request, retryChan chan<- RetryRequest, delay time.Duration) {
 	req, err := createReq(server, w, r)
 	if err != nil {
 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
@@ -103,7 +103,7 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 			lastResp:     resp,
 			lastTS:       now,
 			w:            w,
-			delay:        time.Duration(delay) * time.Second,
+			delay:        delay,
 		}
 	}
 	defer resp.Body.Close()
@@ -124,7 +124,7 @@ func retryRequest(config *config.Config, retryChan chan RetryRequest) {
 			return
 		}
 
-		forwardRequest(server, reqInfo.w, reqInfo.r, retryChan, int(reqInfo.delay)*2)
+		forwardRequest(server, reqInfo.w, reqInfo.r, retryChan, reqInfo.delay*2)
 	}
 }
 

@@ -229,12 +229,12 @@ func (c *Config) Algorithm() (SelectionAlgorithm, bool) {
 	}
 }
 
-func (c Config) Delay() int {
+func (c Config) Delay() time.Duration {
 	if c.Retry.Delay == 0 {
-		return 1
+		return 1 * time.Second
 	}
 
-	return c.Retry.Delay
+	return time.Duration(c.Retry.Delay) * time.Second
 }
 
 func ParseConfig(path string) (*Config, error) {
