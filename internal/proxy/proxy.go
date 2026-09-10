@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -71,7 +72,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, config *config.Config
 		return
 	}
 
-	forwardRequest(server, w, r, retryChan, config.Delay())
+	forwardRequest(server, w, r, retryChan, config.Delay(), 0)
 }
 
 func chooseServer(config *config.Config) (*config.Server, error) {
@@ -84,8 +85,8 @@ func chooseServer(config *config.Config) (*config.Server, error) {
 	return server, nil
 }
 
-func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request, retryChan chan<- RetryRequest, delay time.Duration) {
-	req, err := createReq(server, w, r)
+func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Request, retryChan chan<- RetryRequest, delay time.Duration, timesRetried int) {
+	req, err := createReq(server, r)
 	if err != nil {
 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
 		return
@@ -96,39 +97,60 @@ func forwardRequest(server *config.Server, w http.ResponseWriter, r *http.Reques
 	now := time.Now()
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if r.Method == http.MethodGet {
+			retryChan <- RetryRequest{
+				r:            r,
+				server:       server,
+				timesRetried: 0,
+				lastResp:     resp,
+				lastTS:       now,
+				w:            w,
+				delay:        delay,
+			}
+		}
+
+		return
+	}
+
+	if r.Method == http.MethodGet && resp.StatusCode/100 != 2 {
 		retryChan <- RetryRequest{
 			r:            r,
 			server:       server,
-			timesRetried: 0,
+			timesRetried: timesRetried,
 			lastResp:     resp,
 			lastTS:       now,
 			w:            w,
 			delay:        delay,
 		}
+
+		return
 	}
-	defer resp.Body.Close()
 
 	writeResponse(w, resp, now, server, r)
+
+	// Has to be here and not deferred otherwise the retry on unsuccessfuly request will fail to write the response to the user
+	resp.Body.Close()
 }
 
 func retryRequest(config *config.Config, retryChan chan RetryRequest) {
 	for reqInfo := range retryChan {
 		if reqInfo.timesRetried >= config.Retry.MaxAttempts {
 			writeResponse(reqInfo.w, reqInfo.lastResp, reqInfo.lastTS, reqInfo.server, reqInfo.r)
+			continue
 		}
 
 		server, err := chooseServer(config)
 		if err != nil {
 			log.Println(err)
 			reqInfo.w.WriteHeader(http.StatusNotFound)
-			return
+			continue
 		}
 
-		forwardRequest(server, reqInfo.w, reqInfo.r, retryChan, reqInfo.delay*2)
+		forwardRequest(server, reqInfo.w, reqInfo.r, retryChan, reqInfo.delay*2, reqInfo.timesRetried+1)
 	}
 }
 
-func createReq(server *config.Server, w http.ResponseWriter, r *http.Request) (*http.Request, error) {
+func createReq(server *config.Server, r *http.Request) (*http.Request, error) {
 	target := "http://" + server.Address + r.URL.RequestURI()
 
 	req, err := http.NewRequest(
@@ -146,6 +168,11 @@ func createReq(server *config.Server, w http.ResponseWriter, r *http.Request) (*
 }
 
 func writeResponse(w http.ResponseWriter, resp *http.Response, now time.Time, server *config.Server, r *http.Request) {
+	if resp == nil {
+		fmt.Fprint(w, "Unable to connect to a working server")
+		return
+	}
+
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)
@@ -153,6 +180,10 @@ func writeResponse(w http.ResponseWriter, resp *http.Response, now time.Time, se
 	}
 
 	w.WriteHeader(resp.StatusCode)
+
+	if resp.Body == nil {
+		log.Println("Bullshit")
+	}
 
 	_, err := io.Copy(w, resp.Body)
 	if err != nil {

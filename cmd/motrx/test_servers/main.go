@@ -13,7 +13,7 @@ func main() {
 			return
 		}
 
-		fmt.Fprintln(w, "Hello, World! I am server 1")
+		http.Error(w, "Server 1 failed", http.StatusInternalServerError)
 	})
 
 	handler2 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
